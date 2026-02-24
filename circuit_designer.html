@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+    margin: 0;
+    background-color: #1e293b;
+    color: white;
+    font-family: Arial;
+}
+
+.circuit-container {
+    padding: 20px;
+}
+
+.wire {
+    height: 50px;
+    border-bottom: 2px solid #475569;
+    position: relative;
+}
+
+.gate {
+    width: 60px;
+    height: 40px;
+    background-color: #06b6d4;
+    text-align: center;
+    line-height: 40px;
+    border-radius: 8px;
+    position: absolute;
+    top: 5px;
+    left: 100px;
+    font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+<div class="circuit-container">
+
+    <div class="wire">
+        <div class="gate">H</div>
+    </div>
+
+    <div class="wire">
+        <div class="gate" style="left:200px;">RY</div>
+    </div>
+
+</div>
+</body>
+</html>
