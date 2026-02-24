@@ -1,261 +1,295 @@
 import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
-import time
+import plotly.express as px
 
+# ======================
+# PAGE CONFIG
+# ======================
 st.set_page_config(layout="wide", page_title="Quantum Learning Lab")
 
-# =====================
-# STYLE
-# =====================
+# ======================
+# STYLE (SIDEBAR FIX)
+# ======================
 st.markdown("""
 <style>
 section[data-testid="stSidebar"] {
     background:#0b1220;
 }
-section[data-testid="stSidebar"] label,
 section[data-testid="stSidebar"] h1,
 section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3 {
+section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] label {
     color:white !important;
 }
-section[data-testid="stSidebar"] button {
-    background:#f0f2f6 !important;
-    color:black !important;
+section[data-testid="stSidebar"] div[role="radiogroup"] label,
+section[data-testid="stSidebar"] div[role="radiogroup"] label p {
+    color:white !important;
 }
-div[data-testid="metric-container"]{
-    background:#111827;
-    border-radius:12px;
+.stButton>button {
+    background:#06b6d4;
+    color:white;
+    border-radius:8px;
+    font-weight:bold;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# =====================
-# STATES
-# =====================
+# ======================
+# SESSION STATE
+# ======================
 if "state" not in st.session_state:
-    st.session_state.state=np.array([1.,0.,0.])
-
-if "score" not in st.session_state:
-    st.session_state.score=0
+    st.session_state.state=np.array([1.,0.])
 
 if "progress" not in st.session_state:
     st.session_state.progress=0
 
-# =====================
-# TITLE
-# =====================
-st.title("⚛️ Quantum Computing Interactive Learning Lab")
-st.caption("Live Quantum Simulation + Learning Platform")
+if "score" not in st.session_state:
+    st.session_state.score=0
 
-# =====================
-# SIDEBAR
-# =====================
-st.sidebar.title("Simulation Controls")
+if "q_index" not in st.session_state:
+    st.session_state.q_index=0
 
-noise=st.sidebar.slider("Noise",0.0,1.0,0.1,0.01)
-decay=st.sidebar.slider("Decoherence",0.0,0.2,0.05,0.01)
-steps=st.sidebar.slider("Steps",50,200,120)
+if "answered" not in st.session_state:
+    st.session_state.answered=False
 
-mode=st.sidebar.selectbox(
-"Simulation Mode",
-["Single Qubit","Entanglement","Noise Comparison"]
+if "circuit" not in st.session_state:
+    st.session_state.circuit=[]
+
+# ======================
+# BASIC GATES
+# ======================
+H=(1/np.sqrt(2))*np.array([[1,1],[1,-1]])
+X=np.array([[0,1],[1,0]])
+Y=np.array([[0,-1j],[1j,0]])
+Z=np.array([[1,0],[0,-1]])
+
+gates={"H":H,"X":X,"Y":Y,"Z":Z}
+
+# ======================
+# SIDEBAR NAVIGATION
+# ======================
+st.sidebar.title("⚛ Quantum Lab")
+
+page=st.sidebar.radio(
+    "Go to",
+    ["Bloch Simulation","Circuit Designer",
+     "Learning Module","Quiz",
+     "Noise & Decoherence",
+     "Linear Algebra Lab",
+     "Multi-Qubit Research",
+     "Quantum Algorithms",
+     "3D Viewer"]
 )
 
-# =====================
-# GATES
-# =====================
-st.sidebar.subheader("Quantum Gates")
+# ======================
+# GLOBAL CONTROLS
+# ======================
+if page in ["Bloch Simulation","Circuit Designer"]:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Simulation Controls")
 
-if st.sidebar.button("Apply X"):
-    st.session_state.state[0]*=-1
-if st.sidebar.button("Apply Y"):
-    st.session_state.state[1]*=-1
-if st.sidebar.button("Apply Z"):
-    st.session_state.state[2]*=-1
-if st.sidebar.button("Reset"):
-    st.session_state.state=np.array([1.,0.,0.])
+    noise=st.sidebar.slider("Noise",0.0,1.0,0.1,0.01)
+    decay=st.sidebar.slider("Decoherence",0.0,0.2,0.05,0.01)
+    steps=st.sidebar.slider("Steps",50,200,120)
 
-# =====================
-# SIMULATION ENGINE
-# =====================
-def simulate(noise_level):
-    traj=[]
-    s=st.session_state.state.copy()
+# ======================
+# BLOCH SIMULATION
+# ======================
+if page=="Bloch Simulation":
 
-    for _ in range(steps):
-        s*= (1-decay)
-        s += np.random.normal(0,noise_level,3)
+    st.title("🧭 Bloch Sphere Simulation")
 
-        n=np.linalg.norm(s)
-        if n>1:
-            s/=n
+    def simulate():
+        traj=[]
+        s=np.array([1.,0.,0.])
+        for _ in range(steps):
+            s*=(1-decay)
+            s+=np.random.normal(0,noise,3)
+            n=np.linalg.norm(s)
+            if n>1: s/=n
+            traj.append(s.copy())
+        return np.array(traj)
 
-        traj.append(s.copy())
-
-    return np.array(traj)
-
-# =====================
-# BLOCH ANIMATION
-# =====================
-def bloch_animated(traj):
+    traj=simulate()
 
     u,v=np.mgrid[0:2*np.pi:30j,0:np.pi:15j]
     x=np.cos(u)*np.sin(v)
     y=np.sin(u)*np.sin(v)
     z=np.cos(v)
 
-    sphere=go.Surface(
-        x=x,y=y,z=z,
-        opacity=0.15,
-        colorscale="Blues",
-        showscale=False
-    )
+    fig=go.Figure()
+    fig.add_trace(go.Surface(x=x,y=y,z=z,opacity=0.15,showscale=False))
+    fig.add_trace(go.Scatter3d(
+        x=traj[:,0],y=traj[:,1],z=traj[:,2],
+        mode="lines",line=dict(color="cyan",width=5)
+    ))
+    st.plotly_chart(fig,use_container_width=True)
 
-    path=go.Scatter3d(
-        x=traj[:,0],
-        y=traj[:,1],
-        z=traj[:,2],
-        mode="lines",
-        line=dict(width=5,color="cyan")
-    )
+# ======================
+# CIRCUIT DESIGNER
+# ======================
+if page=="Circuit Designer":
 
-    frames=[]
+    st.title("🧠 Quantum Circuit Designer")
 
-    for angle in np.linspace(0,2*np.pi,60):
-        frames.append(
-            go.Frame(
-                layout=dict(
-                    scene_camera=dict(
-                        eye=dict(
-                            x=np.cos(angle)*2,
-                            y=np.sin(angle)*2,
-                            z=1.2
-                        )
-                    )
-                )
-            )
-        )
+    gate=st.selectbox("Add Gate",["H","X","Y","Z"])
 
-    fig=go.Figure(
-        data=[sphere,path],
-        frames=frames
-    )
+    if st.button("Add Gate"):
+        st.session_state.circuit.append(gate)
 
-    fig.update_layout(
-        height=600,
-        margin=dict(l=0,r=0,b=0,t=0),
-        updatemenus=[{
-            "type":"buttons",
-            "buttons":[
-                {
-                    "label":"▶ Play Rotation",
-                    "method":"animate",
-                    "args":[None,{
-                        "frame":{"duration":30,"redraw":True},
-                        "fromcurrent":True
-                    }]
-                }
-            ]
-        }]
-    )
+    st.write("Circuit:", " → ".join(st.session_state.circuit))
 
-    return fig
+    if st.button("Clear Circuit"):
+        st.session_state.circuit=[]
+        st.session_state.state=np.array([1.,0.])
 
-# =====================
-# MAIN DISPLAY (FIXED)
-# =====================
-traj=simulate(noise)
+    state=np.array([1.,0.])
+    for g in st.session_state.circuit:
+        state=gates[g] @ state
 
-st.plotly_chart(
-    bloch_animated(traj),
-    use_container_width=True
-)
+    st.session_state.state=state
 
-# =====================
-# MEASUREMENT
-# =====================
-p0=(1+traj[-1,2])/2
-p1=1-p0
+    st.metric("P(0)",f"{abs(state[0])**2:.3f}")
+    st.metric("P(1)",f"{abs(state[1])**2:.3f}")
 
-st.subheader("Measurement Probability")
+# ======================
+# LEARNING MODULE (UPDATED CONTENT)
+# ======================
+if page=="Learning Module":
 
-a,b=st.columns(2)
-a.metric("P(0)",f"{p0:.2f}")
-b.metric("P(1)",f"{p1:.2f}")
+    st.title("🎓 Learning Modules")
 
-# =====================
-# ADVANCED LEARNING PANEL
-# =====================
-st.markdown("---")
-st.header("🎓 Learning Modules")
+    lessons={
+        "Qubit":"""A qubit (quantum bit) is the smallest unit of information.
 
-lessons={
-"Qubit":"Qubits exist in continuous quantum state space.",
-"Superposition":"Qubits can exist in multiple states at once.",
-"Gates":"Quantum gates rotate states on Bloch sphere.",
-"Noise":"Noise destroys coherence."
-}
+|ψ⟩ = α|0⟩ + β|1⟩
 
-selected=st.selectbox("Choose Concept",list(lessons.keys()))
-st.info(lessons[selected])
+• Classical bit → 0 OR 1  
+• Qubit → 0 AND 1 (superposition)  
+• Measurement collapses state
 
-if st.button("Mark Lesson Complete"):
-    st.session_state.progress+=1
+💡 Analogy: Spinning coin.""",
 
-# =====================
-# ADVANCED QUIZ
-# =====================
-st.markdown("---")
-st.header("🧠 Advanced Quiz")
+        "Superposition":"""Superposition means a qubit can exist in multiple states simultaneously.
 
-quiz_questions=[
-("A qubit differs from a bit because:",
- ["It is physical","It can exist between 0 and 1","It stores more data"],1),
+1 qubit → 2 states  
+2 qubits → 4 states  
+3 qubits → 8 states
 
-("Superposition means:",
- ["Multiple states","Only 0","Only 1"],0),
+💡 Enables quantum parallelism.""",
 
-("Bloch sphere represents:",
- ["State space","Hardware","Signal"],0),
+        "Quantum Gates":"""Quantum gates change qubit states.
 
-("Noise causes:",
- ["Collapse","Stability","Speed"],0),
+X → flip  
+Y → rotation  
+Z → phase change  
+H → creates superposition  
+CNOT → entanglement
 
-("Decoherence leads to:",
- ["Quantum randomness","Perfect computation","Memory increase"],0),
+• Gates are reversible  
+• Represented as matrices""",
 
-("Entanglement means:",
- ["Independent states","Linked quantum behavior","Noise"],1)
-]
+        "Noise & Decoherence":"""Noise introduces errors.
 
-correct_answers=0
+Decoherence = loss of quantum properties.
 
-for i,(q,opts,corr) in enumerate(quiz_questions):
-    ans=st.radio(q,opts,key=f"quiz{i}")
-    if ans==opts[corr]:
-        correct_answers+=1
+• Quantum states are fragile  
+• Error correction is essential
 
-if st.button("Submit Full Quiz"):
-    st.session_state.score=correct_answers
+💡 Analogy: spinning top falling."""
+    }
 
-    st.success(f"Final Score: {correct_answers}/6")
+    selected=st.selectbox("Choose Concept",list(lessons.keys()))
+    st.info(lessons[selected])
 
-    if correct_answers<=2:
-        st.warning("Level: Beginner")
-    elif correct_answers<=4:
-        st.info("Level: Intermediate")
+    if st.button("Mark Lesson Complete"):
+        if st.session_state.progress < 5:
+            st.session_state.progress += 1
+        st.success("Progress Updated!")
+
+# ======================
+# QUIZ (FULL UPDATED)
+# ======================
+if page=="Quiz":
+
+    st.title("🧠 Quantum Quiz")
+
+    questions=[
+        {"q":"A qubit differs from a classical bit because it:",
+         "opts":["Stores more memory","Can exist in both 0 and 1 states simultaneously","Is faster physically","Uses electricity differently"],
+         "correct":1,"explain":"Qubits exist in superposition."},
+
+        {"q":"What happens when a qubit is measured?",
+         "opts":["It splits","It collapses to 0 or 1","It disappears","Nothing changes"],
+         "correct":1,"explain":"Measurement collapses the state."},
+
+        {"q":"Superposition means:",
+         "opts":["Only 0","Only 1","Multiple states at once","Duplicated"],
+         "correct":2,"explain":"A qubit can exist in multiple states."},
+
+        {"q":"Why is superposition useful?",
+         "opts":["Cheaper hardware","Parallel computation","Smaller circuits","Less electricity"],
+         "correct":1,"explain":"Quantum parallelism enables huge computation."},
+
+        {"q":"X gate is similar to:",
+         "opts":["AND","OR","NOT (flip)","XOR"],
+         "correct":2,"explain":"X flips |0⟩ and |1⟩."},
+
+        {"q":"Gate used to create superposition:",
+         "opts":["Z","Hadamard","CNOT","Y"],
+         "correct":1,"explain":"Hadamard creates equal superposition."},
+
+        {"q":"Quantum gates are:",
+         "opts":["Irreversible","Random","Reversible","Destructive"],
+         "correct":2,"explain":"Quantum operations are unitary."},
+
+        {"q":"Noise causes:",
+         "opts":["Faster execution","Loss of coherence","Better accuracy","Less energy"],
+         "correct":1,"explain":"Noise introduces errors."},
+
+        {"q":"Decoherence means:",
+         "opts":["Creating qubits","Loss of quantum properties","More superposition","Faster gates"],
+         "correct":1,"explain":"Decoherence destroys quantum behavior."}
+    ]
+
+    if st.session_state.q_index >= len(questions):
+        st.success(f"🎉 Quiz Complete! Score: {st.session_state.score}/{len(questions)}")
+        if st.button("Restart Quiz"):
+            st.session_state.q_index=0
+            st.session_state.score=0
+            st.session_state.answered=False
+            st.rerun()
+        st.stop()
+
+    q=questions[st.session_state.q_index]
+    st.subheader(f"Question {st.session_state.q_index+1}")
+    st.write(q["q"])
+
+    selected=st.radio("Choose:",q["opts"])
+
+    if not st.session_state.answered:
+        if st.button("Submit Answer"):
+            if selected==q["opts"][q["correct"]]:
+                st.success("🎉 Correct! Hurray!")
+                st.session_state.score += 1
+            else:
+                st.error("❌ Wrong!")
+                st.info(q["explain"])
+            st.session_state.answered=True
     else:
-        st.success("Level: Quantum Explorer 🚀")
+        if st.button("Next Question"):
+            st.session_state.q_index += 1
+            st.session_state.answered=False
+            st.rerun()
 
-# =====================
-# DASHBOARD
-# =====================
+# ======================
+# SIDEBAR DASHBOARD
+# ======================
 st.sidebar.markdown("---")
 st.sidebar.subheader("Progress Dashboard")
 
 progress=min(st.session_state.progress*20,100)
-
 st.sidebar.progress(progress/100)
 st.sidebar.metric("Progress %",progress)
 st.sidebar.metric("Quiz Score",st.session_state.score)
